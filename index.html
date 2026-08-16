@@ -1,0 +1,596 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>العمري ماب - أرشيف واستعلام الصور الجوية التاريخية</title>
+  
+  <!-- مكتبات Leaflet الأساسية -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <!-- مكتبة Turf.js للتحليل المكاني وفحص النقر -->
+  <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
+
+  <!-- مكتبة محرك البحث الجغرافي (Geocoder) -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.css" />
+  <script src="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.js"></script>
+
+  <!-- استدعاء ملفات حدود التغطية -->
+  <script src="footprints/footprint_1964.js"></script>
+  <script src="footprints/footprint_1966.js"></script>
+  <script src="footprints/footprint_1973-03-12.js"></script>
+  <script src="footprints/footprint_1973-04-03.js"></script>
+  <script src="footprints/footprint_1973-11-13.js"></script>
+  <script src="footprints/footprint_1974.js"></script>
+  <script src="footprints/footprint_1975-01-27.js"></script>
+  <script src="footprints/footprint_1980-06-25.js"></script>
+  <script src="footprints/footprint_1982.js"></script>
+  <script src="footprints/footprint_1982-05-23.js"></script>
+  <script src="footprints/footprint_1983.js"></script>
+
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+    body, html { width: 100%; height: 100%; overflow: hidden; background: #1e1e1e; }
+    
+    #map { width: 100vw; height: 100vh; position: absolute; top: 0; left: 0; z-index: 1; }
+
+    /* العلامة المائية المكررة فوق الشاشة */
+    .watermark-grid-container {
+      position: absolute;
+      top: -20%;
+      left: -20%;
+      width: 140%;
+      height: 140%;
+      z-index: 500;
+      pointer-events: none;
+      display: none;
+      opacity: 0;
+      transition: opacity 0.4s ease;
+      transform: rotate(-22deg);
+      overflow: hidden;
+      user-select: none;
+    }
+
+    .watermark-pattern {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-around;
+      align-content: space-around;
+      width: 100%;
+      height: 100%;
+      gap: 45px 35px;
+    }
+
+    .watermark-item {
+      color: rgba(220, 53, 69, 0.38);
+      font-size: 16px;
+      font-weight: 800;
+      text-align: center;
+      line-height: 1.2;
+      text-shadow: 1px 1px 2px rgba(255, 255, 255, 0.4), 0px 0px 6px rgba(0, 0, 0, 0.4);
+      white-space: nowrap;
+    }
+
+    /* زر فتح وإغلاق القائمة الجانبية */
+    .toggle-sidebar-btn {
+      position: absolute;
+      top: 15px;
+      right: 15px;
+      z-index: 1100;
+      background: #007bff;
+      color: #fff;
+      border: none;
+      padding: 10px 16px;
+      border-radius: 8px;
+      font-weight: bold;
+      font-size: 13px;
+      cursor: pointer;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      transition: background 0.2s;
+    }
+    .toggle-sidebar-btn:hover { background: #0056b3; }
+
+    /* الشريط الجانبي */
+    .sidebar {
+      position: absolute;
+      top: 65px;
+      right: 15px;
+      z-index: 1050;
+      width: 300px;
+      max-height: calc(100vh - 150px);
+      background: rgba(255, 255, 255, 0.96);
+      backdrop-filter: blur(5px);
+      border-radius: 12px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.25);
+      display: flex;
+      flex-direction: column;
+      transition: transform 0.3s ease, opacity 0.3s ease;
+      overflow: hidden;
+    }
+
+    .sidebar.hidden {
+      transform: translateX(340px);
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .sidebar-header {
+      background: #112233;
+      color: white;
+      padding: 14px 16px;
+      font-size: 14px;
+      font-weight: bold;
+      border-bottom: 3px solid #007bff;
+    }
+
+    .sidebar-content {
+      overflow-y: auto;
+      padding: 10px;
+    }
+
+    .city-group {
+      margin-bottom: 10px;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      overflow: hidden;
+      background: #fff;
+    }
+
+    .city-title {
+      background: #f8f9fa;
+      padding: 10px 12px;
+      font-weight: bold;
+      font-size: 13px;
+      color: #2c3e50;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid #edf2f7;
+    }
+
+    .year-btn {
+      display: block;
+      width: 100%;
+      text-align: right;
+      padding: 8px 14px;
+      background: none;
+      border: none;
+      border-bottom: 1px dashed #edf2f7;
+      font-size: 12px;
+      color: #4a5568;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .year-btn:last-child { border-bottom: none; }
+
+    .year-btn:hover {
+      background: #ebf8ff;
+      color: #3182ce;
+      padding-right: 18px;
+    }
+
+    .year-btn.active {
+      background: #3182ce;
+      color: #ffffff;
+      font-weight: bold;
+    }
+
+    /* كارت التحكم بالشفافية */
+    .standalone-opacity-card {
+      position: absolute;
+      bottom: 20px;
+      left: 15px;
+      z-index: 1000;
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(5px);
+      padding: 10px 14px;
+      border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.25);
+      font-size: 11px;
+      color: #2d3748;
+      width: 220px;
+    }
+    .standalone-opacity-card input { width: 100%; margin-top: 6px; cursor: pointer; }
+
+    /* كارت التواصل */
+    .contact-card-mini {
+      position: absolute;
+      bottom: 20px;
+      right: 15px;
+      z-index: 1000;
+      background: rgba(255, 255, 255, 0.95);
+      padding: 8px 12px;
+      border-radius: 8px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.25);
+      font-size: 11px;
+      color: #1a2a3a;
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+    .contact-card-mini .author { font-weight: bold; font-size: 12px; color: #007bff; }
+    .contact-card-mini .address { font-size: 10px; color: #555; }
+    .contact-card-mini .links { display: flex; gap: 8px; align-items: center; margin-top: 2px; }
+    .contact-card-mini a { text-decoration: none; color: #1d72b8; font-weight: 600; }
+
+    .whatsapp-btn {
+      display: block; width: 100%; margin-top: 8px; padding: 7px 0;
+      background-color: #25D366; color: white !important; text-align: center;
+      text-decoration: none; font-weight: bold; font-size: 12px;
+      border-radius: 6px; box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+      transition: background 0.2s;
+    }
+    .whatsapp-btn:hover { background-color: #1eb857; }
+
+    .leaflet-top.leaflet-left { top: 15px; left: 15px; }
+  </style>
+</head>
+<body>
+
+  <!-- زر القائمة الجانبية -->
+  <button class="toggle-sidebar-btn" onclick="toggleSidebar()">
+    <span>🗺️ العمري ماب - استعراض المدن</span>
+  </button>
+
+  <!-- الشريط الجانبي للمدن -->
+  <div class="sidebar" id="sidebar">
+    <div class="sidebar-header">
+      📸 اختر المدينة وسنة التصوير الجوي
+    </div>
+    
+    <div class="sidebar-content">
+
+      <div class="city-group">
+        <div class="city-title">📍 مدينة البيضاء</div>
+        <button class="year-btn" onclick="loadCityTile('AlBayda_1973', [13.9852, 45.5727], 15, this)">تصوير جوي - 1973</button>
+        <button class="year-btn" onclick="loadCityTile('AlBayda_1981', [13.9852, 45.5727], 15, this)">تصوير جوي - 1981</button>
+      </div>
+
+      <div class="city-group">
+        <div class="city-title">📍 مديرية ذي ناعم</div>
+        <button class="year-btn" onclick="loadCityTile('DhiNaim_1981', [14.103806, 45.450361], 15, this)">تصوير جوي - 1981</button>
+      </div>
+
+      <div class="city-group">
+        <div class="city-title">📍 مدينة رداع</div>
+        <button class="year-btn" onclick="loadCityTile('Rada_1973', [14.4278, 44.8358], 15, this)">تصوير جوي - 1973</button>
+        <button class="year-btn" onclick="loadCityTile('Rada_1983', [14.4278, 44.8358], 15, this)">تصوير جوي - 1983</button>
+      </div>
+
+      <div class="city-group">
+        <div class="city-title">📍 صنعاء القديمة</div>
+        <button class="year-btn" onclick="loadCityTile('Sanaa_1965', [15.3522, 44.2158], 15, this)">تصوير جوي - 1965</button>
+        <button class="year-btn" onclick="loadCityTile('Sanaa_1966', [15.3522, 44.2158], 15, this)">تصوير جوي - 1966</button>
+      </div>
+
+      <div class="city-group">
+        <div class="city-title">📍 مدينة صنعاء</div>
+        <button class="year-btn" onclick="loadCityTile('Sanaa_1973', [15.3694, 44.1910], 15, this)">تصوير جوي - 1973</button>
+        <button class="year-btn" onclick="loadCityTile('Sanaa_1981', [15.3694, 44.1910], 15, this)">تصوير جوي - 1981</button>
+      </div>
+
+      <div class="city-group">
+        <div class="city-title">📍 مدينة عدن</div>
+        <button class="year-btn" onclick="loadCityTile('Aden_1973', [12.7855, 45.0186], 14, this)">تصوير جوي - 1973</button>
+        <button class="year-btn" onclick="loadCityTile('Aden_1980', [12.7855, 45.0186], 14, this)">تصوير جوي - 1980</button>
+      </div>
+
+      <div class="city-group">
+        <div class="city-title">📍 مدينة تعز</div>
+        <button class="year-btn" onclick="loadCityTile('Taiz_1975', [13.5789, 44.0194], 15, this)">تصوير جوي - 1975</button>
+        <button class="year-btn" onclick="loadCityTile('Taiz_1980', [13.5789, 44.0194], 15, this)">تصوير جوي - 1980</button>
+      </div>
+
+      <div class="city-group">
+        <div class="city-title">📍 مدينة الحديدة</div>
+        <button class="year-btn" onclick="loadCityTile('Hodeidah_1981', [14.7978, 42.9545], 14, this)">تصوير جوي - 1981</button>
+      </div>
+
+      <div class="city-group">
+        <div class="city-title">📍 مدينة إب</div>
+        <button class="year-btn" onclick="loadCityTile('Ibb_1973', [13.9667, 44.1833], 15, this)">تصوير جوي - 1973</button>
+        <button class="year-btn" onclick="loadCityTile('Ibb_1983', [13.9667, 44.1833], 15, this)">تصوير جوي - 1983</button>
+      </div>
+
+      <div class="city-group">
+        <div class="city-title">📍 مدينة ذمار</div>
+        <button class="year-btn" onclick="loadCityTile('Dhamar_1975', [14.5425, 44.4061], 15, this)">تصوير جوي - 1975</button>
+        <button class="year-btn" onclick="loadCityTile('Dhamar_1983', [14.5425, 44.4061], 15, this)">تصوير جوي - 1983</button>
+      </div>
+
+      <div class="city-group">
+        <div class="city-title">📍 مدينة المخاء</div>
+        <button class="year-btn" onclick="loadCityTile('Mokha_1982', [13.3131, 43.2478], 15, this)">تصوير جوي - 1982</button>
+      </div>
+
+      <div class="city-group">
+        <div class="city-title">📍 مدينة حجة</div>
+        <button class="year-btn" onclick="loadCityTile('Hajjah_1981', [15.6942, 43.6053], 15, this)">تصوير جوي - 1981</button>
+      </div>
+
+      <div class="city-group">
+        <div class="city-title">📍 مدينة عمران</div>
+        <button class="year-btn" onclick="loadCityTile('Amran_1982', [15.6594, 43.9439], 15, this)">تصوير جوي - 1982</button>
+      </div>
+
+      <div class="city-group">
+        <div class="city-title">📍 سد مأرب</div>
+        <button class="year-btn" onclick="loadCityTile('Marib_1983', [15.4022, 45.2708], 14, this)">تصوير جوي - 1983</button>
+      </div>
+
+      <div class="city-group">
+        <div class="city-title">📍 مدينة عتق (شبوة)</div>
+        <button class="year-btn" onclick="loadCityTile('Ataq_1984', [14.5372, 46.8319], 15, this)">تصوير جوي - 1984</button>
+      </div>
+
+      <div class="city-group">
+        <div class="city-title">📍 مدينة سيئون</div>
+        <button class="year-btn" onclick="loadCityTile('Seiyun_1980', [15.9431, 48.7872], 15, this)">تصوير جوي - 1980</button>
+      </div>
+
+      <div class="city-group">
+        <div class="city-title">📍 مدينة يريم</div>
+        <button class="year-btn" onclick="loadCityTile('Yarim_1973', [14.2981, 44.3778], 15, this)">تصوير جوي - 1973</button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- التحكم بالشفافية -->
+  <div class="standalone-opacity-card">
+    <label><b>🎚️ درجة شفافية الصورة التاريخية:</b></label>
+    <input type="range" id="opacityRange" min="0" max="1" step="0.05" value="0.9" oninput="changeOpacity(this.value)">
+  </div>
+
+  <!-- كارت التواصل -->
+  <div class="contact-card-mini">
+    <div class="author">إعداد: المهندس أبو عاصم العمري</div>
+    <div class="address">📍 محافظة البيضاء - مديرية ذي ناعم</div>
+    <div class="links">
+      <span>💬 <a href="https://wa.me/967771529987" target="_blank">واتساب</a></span>
+      <span>|</span>
+      <span>📘 <a href="https://www.facebook.com/share/18SaKmWUPw/" target="_blank">فيسبوك</a></span>
+    </div>
+  </div>
+
+  <!-- الخريطة -->
+  <div id="map"></div>
+
+  <!-- العلامة المائية -->
+  <div id="watermarkGrid" class="watermark-grid-container">
+    <div class="watermark-pattern" id="watermarkPattern"></div>
+  </div>
+
+  <script>
+    function buildWatermarkGrid() {
+      var patternContainer = document.getElementById('watermarkPattern');
+      var itemHTML = `
+        <div class="watermark-item">
+          مكتب العمري ماب<br>
+          العنوان محافظة البيضاء مديريه ذي ناعم<br>
+          التواصل الرقم 771529987
+        </div>
+      `;
+      patternContainer.innerHTML = itemHTML.repeat(42);
+    }
+    buildWatermarkGrid();
+
+    var esriSat = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+      maxZoom: 19, 
+      attribution: 'Esri World Imagery',
+      zIndex: 1
+    });
+
+    var googleHybrid = L.tileLayer('https://{s}.google.com/vt/lyrs=s,h&x={x}&y={y}&z={z}&hl=ar', {
+      maxZoom: 20,
+      subdomains: ['mt0', 'mt1', 'mt2', 'mt3'],
+      attribution: 'Google Earth',
+      zIndex: 1
+    });
+
+    var googleStreets = L.tileLayer('https://{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}&hl=ar', {
+      maxZoom: 20,
+      subdomains: ['mt0', 'mt1', 'mt2', 'mt3'],
+      attribution: 'Google Maps',
+      zIndex: 1
+    });
+
+    var map = L.map('map', {
+      center: [15.3694, 44.1910],
+      zoom: 7,
+      layers: [esriSat]
+    });
+
+    map.createPane('historicalPane');
+    map.getPane('historicalPane').style.zIndex = 400;
+
+    var photonGeocoder = L.Control.Geocoder.photon({
+      serviceUrl: 'https://photon.komoot.io/api/',
+      geocodingQueryParams: { 'lang': 'ar' }
+    });
+
+    var geocoderControl = L.Control.geocoder({
+      geocoder: photonGeocoder,
+      placeholder: "ابحث عن منطقة أو مدينة...",
+      defaultMarkGeocode: false
+    }).addTo(map);
+
+    var searchMarker = null;
+
+    geocoderControl.on('markgeocode', function(e) {
+      var latlng = e.geocode.center;
+      if (searchMarker) { map.removeLayer(searchMarker); }
+      map.setView(latlng, 15);
+      searchMarker = L.marker(latlng).addTo(map)
+        .bindPopup(`<b>${e.geocode.name}</b><br>اضغط في الخريطة حول النقطة لفحص التواريخ`)
+        .openPopup();
+    });
+
+    var baseMaps = { 
+      "أقمار صناعية (Esri)": esriSat,
+      "قوقل إيرث (أقمار + شوارع)": googleHybrid,
+      "قوقل شوارع": googleStreets
+    };
+
+    L.control.layers(baseMaps, null, { collapsed: true }).addTo(map);
+
+    var currentHistoricalLayer = null;
+    var currentOpacity = 0.9;
+    var watermarkGridEl = document.getElementById('watermarkGrid');
+
+    function toggleSidebar() {
+      document.getElementById('sidebar').classList.toggle('hidden');
+    }
+
+    function updateWatermarkVisibility() {
+      if (currentHistoricalLayer && map.getZoom() >= 15) {
+        watermarkGridEl.style.display = 'block';
+        setTimeout(() => { watermarkGridEl.style.opacity = '1'; }, 20);
+      } else {
+        watermarkGridEl.style.opacity = '0';
+        setTimeout(() => { watermarkGridEl.style.display = 'none'; }, 300);
+      }
+    }
+
+    map.on('zoomend', updateWatermarkVisibility);
+
+    // =========================================================
+    // دالة التحميل الذكية: تجرب صيغة PNG أولاً، فإن لم تجدها تحول تلقائياً لـ JPG
+    // =========================================================
+    function loadCityTile(folderName, coords, zoomLevel, btnElement) {
+      document.querySelectorAll('.year-btn').forEach(btn => btn.classList.remove('active'));
+      if(btnElement) btnElement.classList.add('active');
+
+      if (currentHistoricalLayer) {
+        map.removeLayer(currentHistoricalLayer);
+      }
+
+      // محاولة التحميل بـ PNG أولاً
+      var pngUrl = folderName + '/{z}/{x}/{y}.png';
+      var jpgUrl = folderName + '/{z}/{x}/{y}.jpg';
+
+      var testLayer = L.tileLayer(pngUrl, {
+        maxZoom: 20,
+        minZoom: 10,
+        opacity: currentOpacity,
+        tms: false,
+        pane: 'historicalPane'
+      });
+
+      // في حال تعذر تحميل PNG يتم استخدام JPG تلقائياً
+      testLayer.on('tileerror', function() {
+        if (map.hasLayer(testLayer)) {
+          map.removeLayer(testLayer);
+          currentHistoricalLayer = L.tileLayer(jpgUrl, {
+            maxZoom: 20,
+            minZoom: 10,
+            opacity: currentOpacity,
+            tms: false,
+            pane: 'historicalPane',
+            errorTileUrl: 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7'
+          }).addTo(map);
+        }
+      });
+
+      currentHistoricalLayer = testLayer;
+      currentHistoricalLayer.addTo(map);
+
+      map.flyTo(coords, zoomLevel, { duration: 1.8 });
+      updateWatermarkVisibility();
+    }
+
+    function changeOpacity(val) {
+      currentOpacity = parseFloat(val);
+      if (currentHistoricalLayer) {
+        currentHistoricalLayer.setOpacity(currentOpacity);
+      }
+    }
+
+    // نظام الفحص المكاني واستعلام التواريخ
+    const allDatasets = [
+      { year: "1964", data: (typeof footprint1964Data !== 'undefined' ? footprint1964Data : null) },
+      { year: "1966", data: (typeof footprint1966Data !== 'undefined' ? footprint1966Data : null) },
+      { year: "12 مارس 1973", data: (typeof footprint1973_03_12Data !== 'undefined' ? footprint1973_03_12Data : null) },
+      { year: "03 أبريل 1973", data: (typeof footprint1973_04_03Data !== 'undefined' ? footprint1973_04_03Data : null) },
+      { year: "13 نوفمبر 1973", data: (typeof footprint1973_11_13Data !== 'undefined' ? footprint1973_11_13Data : null) },
+      { year: "1974", data: (typeof footprint1974Data !== 'undefined' ? footprint1974Data : null) },
+      { year: "27 يناير 1975", data: (typeof footprint1975_01_27Data !== 'undefined' ? footprint1975_01_27Data : null) },
+      { year: "25 يونيو 1980", data: (typeof footprint1980_06_25Data !== 'undefined' ? footprint1980_06_25Data : null) },
+      { year: "1982", data: (typeof footprint1982Data !== 'undefined' ? footprint1982Data : null) },
+      { year: "23 مايو 1982", data: (typeof footprint1982_05_23Data !== 'undefined' ? footprint1982_05_23Data : null) },
+      { year: "1983", data: (typeof footprint1983Data !== 'undefined' ? footprint1983Data : null) }
+    ];
+
+    map.on('click', function(e) {
+      const lat = e.latlng.lat.toFixed(6);
+      const lng = e.latlng.lng.toFixed(6);
+      const clickedPoint = turf.point([e.latlng.lng, e.latlng.lat]);
+      let datesFound = [];
+
+      allDatasets.forEach(item => {
+        if (item.data && item.data.features) {
+          item.data.features.forEach(feature => {
+            try {
+              if (turf.booleanPointInPolygon(clickedPoint, feature)) {
+                let dateVal = (feature.properties && feature.properties.Acquisition_Date) 
+                              ? feature.properties.Acquisition_Date 
+                              : item.year;
+                if (!datesFound.includes(dateVal)) {
+                  datesFound.push(dateVal);
+                }
+              }
+            } catch(err) {
+              console.error("خطأ في الفحص:", err);
+            }
+          });
+        }
+      });
+
+      if (datesFound.length > 0) {
+        let listItems = datesFound.map(d => `<li style="margin-bottom: 2px;"><b>تصوير جوي: ${d}</b></li>`).join('');
+        let datesText = datesFound.join(', ');
+        let waMessage = `السلام عليكم م. أبو عاصم، أود طلب صورة جوية للموقع التالي:%0A📍 الإحداثيات: ${lat}, ${lng}%0A📸 التواريخ المتاحة: ${datesText}%0A🗺️ رابط الموقع على الخريطة: https://maps.google.com/?q=${lat},${lng}`;
+        let waUrl = `https://wa.me/967771529987?text=${waMessage}`;
+
+        L.popup()
+          .setLatLng(e.latlng)
+          .setContent(`
+            <div style="text-align: right; font-family: sans-serif; padding: 2px;">
+              <h5 style="margin: 0 0 6px 0; color: #28a745; border-bottom: 1px solid #ddd; padding-bottom: 4px; font-size: 13px;">📸 التواريخ المتاحة لهذه النقطة:</h5>
+              <ul style="margin: 4px 0; padding-right: 18px; color: #155724; font-size: 12px;">
+                ${listItems}
+              </ul>
+              <a href="${waUrl}" target="_blank" class="whatsapp-btn">
+                📲 طلب الصور لهذه النقطة عبر واتساب
+              </a>
+            </div>
+          `)
+          .openOn(map);
+      } else {
+        let waMessageNoData = `السلام عليكم م. أبو عاصم، أبحث عن صور جوية لهذه النقطة وهل تتوفر لها تغطية مستقبلاً؟%0A📍 الإحداثيات: ${lat}, ${lng}%0A🗺️ رابط الموقع: https://maps.google.com/?q=${lat},${lng}`;
+        let waUrlNoData = `https://wa.me/967771529987?text=${waMessageNoData}`;
+
+        L.popup()
+          .setLatLng(e.latlng)
+          .setContent(`
+            <div style="text-align: right; font-family: sans-serif; padding: 2px;">
+              <div style="color: #dc3545; font-weight: bold; font-size: 12px; margin-bottom: 6px;">
+                ⚠️ لا تتوفر صور جوية تاريخية تغطي هذه النقطة حالياً.
+              </div>
+              <a href="${waUrlNoData}" target="_blank" class="whatsapp-btn" style="background-color: #6c757d;">
+                💬 الاستفسار عن هذه النقطة عبر واتساب
+              </a>
+            </div>
+          `)
+          .openOn(map);
+      }
+    });
+
+  </script>
+</body>
+</html>

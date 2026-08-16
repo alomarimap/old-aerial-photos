@@ -1,0 +1,30 @@
+<html>
+  <head>
+    <title>My Map Set Name</title>
+    <style type="text/css">
+      html, body, #basicMap {
+          width: 100%;
+          height: 100%;
+          margin: 0;
+      }
+    </style>
+    <script src="http://www.openlayers.org/api/OpenLayers.js"></script>
+    <script>
+      function init() {
+        map = new OpenLayers.Map("basicMap");
+        var newLayer = new OpenLayers.Layer.OSM("New Layer", "file:///E:/«·⁄„—Ì%20„«»/alomari_map/Mokha_1982/${z}/${x}/${y}.jpg", {numZoomLevels: 19});
+		map.addLayer(newLayer);
+		map.setCenter(new OpenLayers.LonLat(43.25317382812448841,13.30409909268793989) // Center of the map
+          .transform(
+            new OpenLayers.Projection("EPSG:4326"), // transform from WGS 1984
+            new OpenLayers.Projection("EPSG:900913") // to Spherical Mercator Projection
+          ), 14 // Zoom level
+        );
+      }
+    </script>
+  </head>
+  <body onload="init();">
+    <div id="basicMap"></div>
+  </body>
+</html>
+
