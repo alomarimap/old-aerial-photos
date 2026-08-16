@@ -2,7 +2,7 @@
 <html lang="ar" dir="rtl">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>العمري ماب - أرشيف واستعلام الصور الجوية التاريخية</title>
   
   <!-- مكتبات Leaflet الأساسية -->
@@ -121,10 +121,29 @@
     .sidebar-header {
       background: #112233;
       color: white;
-      padding: 14px 16px;
+      padding: 12px 14px;
       font-size: 14px;
       font-weight: bold;
       border-bottom: 3px solid #007bff;
+    }
+
+    /* مربع البحث عن المدن */
+    .city-search-box {
+      padding: 8px 10px;
+      background: #f1f5f9;
+      border-bottom: 1px solid #e2e8f0;
+    }
+    .city-search-box input {
+      width: 100%;
+      padding: 8px 12px;
+      border: 1px solid #cbd5e1;
+      border-radius: 6px;
+      font-size: 12px;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    .city-search-box input:focus {
+      border-color: #007bff;
     }
 
     .sidebar-content {
@@ -180,7 +199,7 @@
       font-weight: bold;
     }
 
-    /* كارت التحكم بالشفافية */
+    /* كارت التحكم بالشفافية وإظهار/إخفاء الطبقة */
     .standalone-opacity-card {
       position: absolute;
       bottom: 20px;
@@ -193,9 +212,36 @@
       box-shadow: 0 4px 12px rgba(0,0,0,0.25);
       font-size: 11px;
       color: #2d3748;
-      width: 220px;
+      width: 230px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
     }
-    .standalone-opacity-card input { width: 100%; margin-top: 6px; cursor: pointer; }
+    
+    .opacity-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .toggle-layer-btn {
+      background: #e2e8f0;
+      border: 1px solid #cbd5e1;
+      padding: 3px 8px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-weight: bold;
+      font-size: 11px;
+      color: #2d3748;
+      transition: all 0.2s;
+    }
+    .toggle-layer-btn.hidden-layer {
+      background: #dc3545;
+      color: #fff;
+      border-color: #dc3545;
+    }
+
+    .standalone-opacity-card input { width: 100%; cursor: pointer; }
 
     /* كارت التواصل */
     .contact-card-mini {
@@ -228,6 +274,56 @@
     .whatsapp-btn:hover { background-color: #1eb857; }
 
     .leaflet-top.leaflet-left { top: 15px; left: 15px; }
+
+    /* ========================================================= */
+    /* تحسينات الشاشات الصغيرة والتجاوب مع الجوال */
+    /* ========================================================= */
+    @media (max-width: 768px) {
+      .toggle-sidebar-btn {
+        top: 10px;
+        right: 10px;
+        padding: 8px 12px;
+        font-size: 12px;
+      }
+
+      .sidebar {
+        top: auto;
+        bottom: 0;
+        right: 0;
+        left: 0;
+        width: 100%;
+        max-height: 55vh;
+        border-radius: 16px 16px 0 0;
+        box-shadow: 0 -4px 20px rgba(0,0,0,0.3);
+      }
+
+      .sidebar.hidden {
+        transform: translateY(100%);
+        opacity: 0;
+      }
+
+      .standalone-opacity-card {
+        bottom: 15px;
+        left: 10px;
+        width: 160px;
+        padding: 8px 10px;
+        font-size: 10px;
+      }
+
+      .contact-card-mini {
+        bottom: 15px;
+        right: 10px;
+        max-width: 180px;
+        padding: 6px 8px;
+      }
+      .contact-card-mini .author { font-size: 10px; }
+      .contact-card-mini .address { display: none; } /* إخفاء العنوان لتوفير المساحة في الشاشة الصغرى */
+
+      .leaflet-top.leaflet-left {
+        top: 55px;
+        left: 10px;
+      }
+    }
   </style>
 </head>
 <body>
@@ -242,8 +338,13 @@
     <div class="sidebar-header">
       📸 اختر المدينة وسنة التصوير الجوي
     </div>
+
+    <!-- مربع البحث عن المدن -->
+    <div class="city-search-box">
+      <input type="text" id="citySearchInput" placeholder="🔍 ابحث عن مدينة أو سنة..." onkeyup="filterCities()">
+    </div>
     
-    <div class="sidebar-content">
+    <div class="sidebar-content" id="sidebarContent">
 
       <div class="city-group">
         <div class="city-title">📍 مدينة البيضاء</div>
@@ -341,9 +442,12 @@
     </div>
   </div>
 
-  <!-- التحكم بالشفافية -->
+  <!-- التحكم بالشفافية وإظهار/إخفاء الطبقة -->
   <div class="standalone-opacity-card">
-    <label><b>🎚️ درجة شفافية الصورة التاريخية:</b></label>
+    <div class="opacity-header">
+      <label><b>🎚️ الشفافية:</b></label>
+      <button class="toggle-layer-btn" id="toggleLayerBtn" onclick="toggleLayerVisibility()">👁️ إظهار/إخفاء</button>
+    </div>
     <input type="range" id="opacityRange" min="0" max="1" step="0.05" value="0.9" oninput="changeOpacity(this.value)">
   </div>
 
@@ -441,14 +545,31 @@
 
     var currentHistoricalLayer = null;
     var currentOpacity = 0.9;
+    var isLayerVisible = true;
     var watermarkGridEl = document.getElementById('watermarkGrid');
 
     function toggleSidebar() {
       document.getElementById('sidebar').classList.toggle('hidden');
     }
 
+    /* دالة الفلترة والتصفية بالبحث للثمن والمدن */
+    function filterCities() {
+      var input = document.getElementById('citySearchInput');
+      var filter = input.value.trim().toLowerCase();
+      var groups = document.querySelectorAll('.city-group');
+
+      groups.forEach(function(group) {
+        var text = group.textContent || group.innerText;
+        if (text.toLowerCase().indexOf(filter) > -1) {
+          group.style.display = "";
+        } else {
+          group.style.display = "none";
+        }
+      });
+    }
+
     function updateWatermarkVisibility() {
-      if (currentHistoricalLayer && map.getZoom() >= 15) {
+      if (currentHistoricalLayer && isLayerVisible && map.getZoom() >= 15) {
         watermarkGridEl.style.display = 'block';
         setTimeout(() => { watermarkGridEl.style.opacity = '1'; }, 20);
       } else {
@@ -459,9 +580,6 @@
 
     map.on('zoomend', updateWatermarkVisibility);
 
-    // =========================================================
-    // دالة التحميل الذكية: تجرب صيغة PNG أولاً، فإن لم تجدها تحول تلقائياً لـ JPG
-    // =========================================================
     function loadCityTile(folderName, coords, zoomLevel, btnElement) {
       document.querySelectorAll('.year-btn').forEach(btn => btn.classList.remove('active'));
       if(btnElement) btnElement.classList.add('active');
@@ -470,26 +588,24 @@
         map.removeLayer(currentHistoricalLayer);
       }
 
-      // محاولة التحميل بـ PNG أولاً
       var pngUrl = folderName + '/{z}/{x}/{y}.png';
       var jpgUrl = folderName + '/{z}/{x}/{y}.jpg';
 
       var testLayer = L.tileLayer(pngUrl, {
         maxZoom: 20,
         minZoom: 10,
-        opacity: currentOpacity,
+        opacity: isLayerVisible ? currentOpacity : 0,
         tms: false,
         pane: 'historicalPane'
       });
 
-      // في حال تعذر تحميل PNG يتم استخدام JPG تلقائياً
       testLayer.on('tileerror', function() {
         if (map.hasLayer(testLayer)) {
           map.removeLayer(testLayer);
           currentHistoricalLayer = L.tileLayer(jpgUrl, {
             maxZoom: 20,
             minZoom: 10,
-            opacity: currentOpacity,
+            opacity: isLayerVisible ? currentOpacity : 0,
             tms: false,
             pane: 'historicalPane',
             errorTileUrl: 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7'
@@ -502,13 +618,37 @@
 
       map.flyTo(coords, zoomLevel, { duration: 1.8 });
       updateWatermarkVisibility();
+
+      // إغلاق القائمة تلقائياً في الجوال بعد اختيار المدينة لإتاحة رؤية الخريطة
+      if (window.innerWidth <= 768) {
+        toggleSidebar();
+      }
     }
 
     function changeOpacity(val) {
       currentOpacity = parseFloat(val);
-      if (currentHistoricalLayer) {
+      if (currentHistoricalLayer && isLayerVisible) {
         currentHistoricalLayer.setOpacity(currentOpacity);
       }
+    }
+
+    /* دالة تبديل إظهار/إخفاء الصورة الجوية بضغطة زر دون التعليق */
+    function toggleLayerVisibility() {
+      var btn = document.getElementById('toggleLayerBtn');
+      if (!currentHistoricalLayer) return;
+
+      if (isLayerVisible) {
+        currentHistoricalLayer.setOpacity(0);
+        isLayerVisible = false;
+        btn.classList.add('hidden-layer');
+        btn.innerText = "❌ مخفية";
+      } else {
+        currentHistoricalLayer.setOpacity(currentOpacity);
+        isLayerVisible = true;
+        btn.classList.remove('hidden-layer');
+        btn.innerText = "👁️ إظهار";
+      }
+      updateWatermarkVisibility();
     }
 
     // نظام الفحص المكاني واستعلام التواريخ
