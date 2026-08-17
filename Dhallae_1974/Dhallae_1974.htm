@@ -12,13 +12,13 @@
     <script>
       function init() {
         map = new OpenLayers.Map("basicMap");
-        var newLayer = new OpenLayers.Layer.OSM("New Layer", "file:///E:/yemen/alomari_map/Dhallae_1974/${z}/${x}/${y}.jpg", {numZoomLevels: 19});
+        var newLayer = new OpenLayers.Layer.OSM("New Layer", "file:///E:/yemen/Dhallae_1974/${z}/${x}/${y}.png", {numZoomLevels: 19});
 		map.addLayer(newLayer);
-		map.setCenter(new OpenLayers.LonLat(44.72808837890570999,13.72337111336214477) // Center of the map
+		map.setCenter(new OpenLayers.LonLat(44.72534179687445999,13.72069966413093312) // Center of the map
           .transform(
             new OpenLayers.Projection("EPSG:4326"), // transform from WGS 1984
             new OpenLayers.Projection("EPSG:900913") // to Spherical Mercator Projection
-          ), 16 // Zoom level
+          ), 15 // Zoom level
         );
       }
     </script>

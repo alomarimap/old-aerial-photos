@@ -8,11 +8,11 @@
 
 <source type="OSM">
   <name>My Map Set Name</name>
-  <FileExt>jpg</FileExt>
-  <LatLonBounds>44.6813964844,13.6726758187,44.7747802734,13.7740664081</LatLonBounds>
+  <FileExt>png</FileExt>
+  <LatLonBounds>44.6704101562,13.6566627789,44.7802734375,13.7847365493</LatLonBounds>
   <NumZoomLevels>19</NumZoomLevels>
   <TileSize>256</TileSize>
-  <BaseURL>file:///E:/yemen/alomari_map/Dhallae_1974/</BaseURL>
+  <BaseURL>file:///E:/yemen/Dhallae_1974/</BaseURL>
   <NativeProj>EPSG:3857</NativeProj>
 </source>
 </source_list>
