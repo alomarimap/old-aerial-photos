@@ -13,8 +13,8 @@
   <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
 
   <!-- مكتبة محرك البحث الجغرافي (Geocoder) -->
-  <link rel="stylesheet" href="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.css" />
-  <script src="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.js"></script>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet-control-geocoder@2.4.0/dist/Control.Geocoder.css" />
+  <script src="https://unpkg.com/leaflet-control-geocoder@2.4.0/dist/Control.Geocoder.js"></script>
 
   <!-- استدعاء ملفات حدود التغطية -->
   <script src="footprints/footprint_1964.js"></script>
@@ -50,6 +50,7 @@
       transform: rotate(-22deg);
       overflow: hidden;
       user-select: none;
+      will-change: transform, opacity;
     }
 
     .watermark-pattern {
@@ -127,7 +128,7 @@
       border-bottom: 3px solid #007bff;
     }
 
-    /* مربع البحث عن المدن */
+    /* مربع البحث عن المدن في القائمة */
     .city-search-box {
       padding: 8px 10px;
       background: #f1f5f9;
@@ -275,9 +276,6 @@
 
     .leaflet-top.leaflet-left { top: 15px; left: 15px; }
 
-    /* ========================================================= */
-    /* تحسينات الشاشات الصغيرة والتجاوب مع الجوال */
-    /* ========================================================= */
     @media (max-width: 768px) {
       .toggle-sidebar-btn {
         top: 10px;
@@ -317,7 +315,7 @@
         padding: 6px 8px;
       }
       .contact-card-mini .author { font-size: 10px; }
-      .contact-card-mini .address { display: none; } /* إخفاء العنوان لتوفير المساحة في الشاشة الصغرى */
+      .contact-card-mini .address { display: none; }
 
       .leaflet-top.leaflet-left {
         top: 55px;
@@ -359,32 +357,42 @@
 
       <div class="city-group">
         <div class="city-title">📍 مدينة رداع</div>
-        <button class="year-btn" onclick="loadCityTile('Rada_1973', [14.4278, 44.8358], 15, this)">تصوير جوي - 1973</button>
         <button class="year-btn" onclick="loadCityTile('Rada_1983', [14.4278, 44.8358], 15, this)">تصوير جوي - 1983</button>
       </div>
 
       <div class="city-group">
         <div class="city-title">📍 صنعاء القديمة</div>
         <button class="year-btn" onclick="loadCityTile('Sanaa_1965', [15.3522, 44.2158], 15, this)">تصوير جوي - 1965</button>
-        <button class="year-btn" onclick="loadCityTile('Sanaa_1966', [15.3522, 44.2158], 15, this)">تصوير جوي - 1966</button>
       </div>
 
       <div class="city-group">
         <div class="city-title">📍 مدينة صنعاء</div>
-        <button class="year-btn" onclick="loadCityTile('Sanaa_1973', [15.3694, 44.1910], 15, this)">تصوير جوي - 1973</button>
         <button class="year-btn" onclick="loadCityTile('Sanaa_1981', [15.3694, 44.1910], 15, this)">تصوير جوي - 1981</button>
       </div>
 
       <div class="city-group">
         <div class="city-title">📍 مدينة عدن</div>
         <button class="year-btn" onclick="loadCityTile('Aden_1973', [12.7855, 45.0186], 14, this)">تصوير جوي - 1973</button>
-        <button class="year-btn" onclick="loadCityTile('Aden_1980', [12.7855, 45.0186], 14, this)">تصوير جوي - 1980</button>
       </div>
 
       <div class="city-group">
         <div class="city-title">📍 مدينة تعز</div>
         <button class="year-btn" onclick="loadCityTile('Taiz_1975', [13.5789, 44.0194], 15, this)">تصوير جوي - 1975</button>
-        <button class="year-btn" onclick="loadCityTile('Taiz_1980', [13.5789, 44.0194], 15, this)">تصوير جوي - 1980</button>
+      </div>
+
+      <div class="city-group">
+        <div class="city-title">📍 مدينة الضالع</div>
+        <button class="year-btn" onclick="loadCityTile('Dhallae_1974', [13.6957, 44.7314], 15, this)">تصوير جوي - 1974</button>
+      </div>
+
+      <div class="city-group">
+        <div class="city-title">📍 مدينة المكلا</div>
+        <button class="year-btn" onclick="loadCityTile('Mukalla_1982', [14.5425, 49.1242], 14, this)">تصوير جوي - 1982</button>
+      </div>
+
+      <div class="city-group">
+        <div class="city-title">📍 مدينة صعدة</div>
+        <button class="year-btn" onclick="loadCityTile('Saada_1981', [16.9402, 43.7628], 15, this)">تصوير جوي - 1981</button>
       </div>
 
       <div class="city-group">
@@ -513,14 +521,16 @@
     map.createPane('historicalPane');
     map.getPane('historicalPane').style.zIndex = 400;
 
-    var photonGeocoder = L.Control.Geocoder.photon({
-      serviceUrl: 'https://photon.komoot.io/api/',
-      geocodingQueryParams: { 'lang': 'ar' }
-    });
-
+    // محرك البحث المعدل باستخدام OSM Nominatim
     var geocoderControl = L.Control.geocoder({
-      geocoder: photonGeocoder,
-      placeholder: "ابحث عن منطقة أو مدينة...",
+      geocoder: L.Control.Geocoder.nominatim({
+        serviceUrl: 'https://nominatim.openstreetmap.org/',
+        geocodingQueryParams: {
+          'accept-language': 'ar',
+          'countrycodes': 'ye'
+        }
+      }),
+      placeholder: "🔍 ابحث عن مدينة أو منطقة باليمن...",
       defaultMarkGeocode: false
     }).addTo(map);
 
@@ -529,9 +539,9 @@
     geocoderControl.on('markgeocode', function(e) {
       var latlng = e.geocode.center;
       if (searchMarker) { map.removeLayer(searchMarker); }
-      map.setView(latlng, 15);
+      map.flyTo(latlng, 15, { duration: 1.5 });
       searchMarker = L.marker(latlng).addTo(map)
-        .bindPopup(`<b>${e.geocode.name}</b><br>اضغط في الخريطة حول النقطة لفحص التواريخ`)
+        .bindPopup(`<b>${e.geocode.name}</b><br>اضغط في الخريطة حول النقطة لفحص التواريخ المتاحة`)
         .openPopup();
     });
 
@@ -552,7 +562,6 @@
       document.getElementById('sidebar').classList.toggle('hidden');
     }
 
-    /* دالة الفلترة والتصفية بالبحث للثمن والمدن */
     function filterCities() {
       var input = document.getElementById('citySearchInput');
       var filter = input.value.trim().toLowerCase();
@@ -588,38 +597,32 @@
         map.removeLayer(currentHistoricalLayer);
       }
 
-      var pngUrl = folderName + '/{z}/{x}/{y}.png';
-      var jpgUrl = folderName + '/{z}/{x}/{y}.jpg';
+      isLayerVisible = true;
+      var toggleBtn = document.getElementById('toggleLayerBtn');
+      if (toggleBtn) {
+        toggleBtn.classList.remove('hidden-layer');
+        toggleBtn.innerText = "👁️ إظهار";
+      }
 
-      var testLayer = L.tileLayer(pngUrl, {
+      var pngUrl = folderName + '/{z}/{x}/{y}.png';
+
+      currentHistoricalLayer = L.tileLayer(pngUrl, {
         maxZoom: 20,
         minZoom: 10,
-        opacity: isLayerVisible ? currentOpacity : 0,
+        opacity: currentOpacity,
         tms: false,
         pane: 'historicalPane'
-      });
+      }).addTo(map);
 
-      testLayer.on('tileerror', function() {
-        if (map.hasLayer(testLayer)) {
-          map.removeLayer(testLayer);
-          currentHistoricalLayer = L.tileLayer(jpgUrl, {
-            maxZoom: 20,
-            minZoom: 10,
-            opacity: isLayerVisible ? currentOpacity : 0,
-            tms: false,
-            pane: 'historicalPane',
-            errorTileUrl: 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7'
-          }).addTo(map);
+      currentHistoricalLayer.on('tileerror', function(error) {
+        if (error.tile.src.endsWith('.png')) {
+          error.tile.src = error.tile.src.replace('.png', '.jpg');
         }
       });
-
-      currentHistoricalLayer = testLayer;
-      currentHistoricalLayer.addTo(map);
 
       map.flyTo(coords, zoomLevel, { duration: 1.8 });
       updateWatermarkVisibility();
 
-      // إغلاق القائمة تلقائياً في الجوال بعد اختيار المدينة لإتاحة رؤية الخريطة
       if (window.innerWidth <= 768) {
         toggleSidebar();
       }
@@ -632,7 +635,6 @@
       }
     }
 
-    /* دالة تبديل إظهار/إخفاء الصورة الجوية بضغطة زر دون التعليق */
     function toggleLayerVisibility() {
       var btn = document.getElementById('toggleLayerBtn');
       if (!currentHistoricalLayer) return;
@@ -651,7 +653,6 @@
       updateWatermarkVisibility();
     }
 
-    // نظام الفحص المكاني واستعلام التواريخ
     const allDatasets = [
       { year: "1964", data: (typeof footprint1964Data !== 'undefined' ? footprint1964Data : null) },
       { year: "1966", data: (typeof footprint1966Data !== 'undefined' ? footprint1966Data : null) },
