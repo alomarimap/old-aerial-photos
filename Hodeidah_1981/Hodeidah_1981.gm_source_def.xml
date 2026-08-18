@@ -10,9 +10,9 @@
   <name>My Map Set Name</name>
   <FileExt>jpg</FileExt>
   <LatLonBounds>42.9235839844,14.7642591786,43.0004882812,14.8173706202</LatLonBounds>
-  <NumZoomLevels>20</NumZoomLevels>
-  <TileSize>256</TileSize>
-  <BaseURL><![CDATA[file:///E:/%C7%E1%DA%E3%D1%ED%20%E3%C7%C8/alomari_map/Hodeidah_1981/]]></BaseURL>
+  <NumZoomLevels>18</NumZoomLevels>
+  <TileSize>1024</TileSize>
+  <BaseURL>file:///E:/yemen/Hodeidah_1981/</BaseURL>
   <NativeProj>EPSG:3857</NativeProj>
 </source>
 </source_list>
